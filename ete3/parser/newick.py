@@ -230,21 +230,33 @@ def read_newick(newick, root_node=None, format=0, quoted_names=False):
         from ..coretype.tree import TreeNode
         root_node = TreeNode()
 
-    if isinstance(newick, six.string_types):   
-        if os.path.exists(newick):
-            if newick.endswith('.gz'):
-                import gzip
-                nw = gzip.open(newick).read()
+    if isinstance(newick, six.string_types):
+        # we duck-type the string newick.
+        # if it is a path, as identified by stat, we assume it is a file
+        # otherwise, we assume it is a string.
+        # On windows, the maximal permitted path length is 220 and therefore
+        # passing large strings raises a ValueError from stat,
+        # which states 'String is too long for Windows'
+        # as a workaround, one can test whether newick is too long to be a
+        # windows string.
+        if len(newick)<220:     # then it could be either a path or a tree
+            if os.path.exists(newick):
+                if newick.endswith('.gz'):
+                    import gzip
+                    nw = gzip.open(newick).read()
+                else:
+                    # note: this raises a deprecated error on  Win 7 with python 3.5.2
+                    nw = open(newick, 'rU').read()
             else:
-                nw = open(newick, 'rU').read()
+                nw = newick
         else:
             nw = newick
 
         matcher = compile_matchers(formatcode=format)
-        nw = nw.strip()
+        nw = nw.strip()        
         if not nw.startswith('(') and nw.endswith(';'):
-            #return _read_node_data(nw[:-1], root_node, "single", matcher, format)
-            return _read_newick_from_string(nw, root_node, matcher, format, quoted_names)
+            return _read_node_data(nw[:-1], root_node, "single", matcher, format)
+
         elif not nw.startswith('(') or not nw.endswith(';'):
             raise NewickError('Unexisting tree file or Malformed newick tree structure.')
         else:
@@ -252,6 +264,7 @@ def read_newick(newick, root_node=None, format=0, quoted_names=False):
 
     else:
         raise NewickError("'newick' argument must be either a filename or a newick string.")
+
 
 def _read_newick_from_string(nw, root_node, matcher, formatcode, quoted_names):
     """ Reads a newick string in the New Hampshire format. """
